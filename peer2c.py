@@ -22,7 +22,7 @@ def receive_messages(server_socket):
 
     while True:
         try:
-            packet, peer_address = server_socket.recvfrom(MSS)
+            packet, peer_address = server_socket.recvfrom(65535)  # Receive entire packet
             sequence_num = int(packet[:SEQUENCE_NUM_SIZE])
             data = packet[HEADER_SIZE:-64]
             received_checksum = packet[-64:].decode()  # Extract checksum from the end
@@ -75,7 +75,7 @@ def send_messages(server_socket, peer_address):
 
             server_socket.settimeout(2)
             try:
-                ack_packet, ack_peer_address = server_socket.recvfrom(MSS)
+                ack_packet, ack_peer_address = server_socket.recvfrom(65535)  
                 ack_sequence_num = int(ack_packet.decode())
 
                 if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
