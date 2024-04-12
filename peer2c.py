@@ -4,17 +4,15 @@ import hashlib
 
 SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
-MSS = 2000  # Maximum Segment Size
-MAX_DATA_SIZE = 1932  # Max size for data in each packet
 
 PEER_IP = '127.0.0.1'
-RECEIVE_PORT = 8000
-SEND_PORT = 8080
+RECEIVE_PORT = 8080
+SEND_PORT = 8000
 
 def generate_checksum(sequence_num, data):
     # Generate SHA-256 checksum for concatenated components
     combined_data = f"{sequence_num}{data}"
-    # print("COMBINED DATA" , combined_data)
+    print("COMBINED DATA" , combined_data)
     checksum = hashlib.sha256(combined_data.encode()).hexdigest()
     return checksum
 
@@ -31,8 +29,8 @@ def receive_messages(server_socket):
 
             # Calculate checksum of received data
             computed_checksum = generate_checksum(sequence_num, data.decode())
-            # print(f"Computed Checksum: {computed_checksum}")
-            # print(f"Received Checksum: {received_checksum}")
+            print(f"Computed Checksum: {computed_checksum}")
+            print(f"Received Checksum: {received_checksum}")
 
             if received_checksum == computed_checksum:
                 # Send ACK back to sender
@@ -49,9 +47,9 @@ def receive_messages(server_socket):
                     del received_chunks[next_sequence_number]  # Remove processed chunk
                     next_sequence_number += 1  # Move to the next expected sequence number
 
-                # print(f"Received ACK {sequence_num} from {peer_address}")
-            # else:
-                # print(f"Received packet {sequence_num} with incorrect checksum. Discarding.")
+                print(f"ACK {sequence_num} received by {peer_address}")
+            else:
+                print(f"Received packet {sequence_num} with incorrect checksum. Discarding.")
 
         except socket.timeout:
             print("Receive timeout occurred.")
@@ -67,33 +65,25 @@ def send_messages(server_socket, peer_address):
                 print("Exiting...")
                 return
 
-            message_chunks = [message[i:i + MAX_DATA_SIZE] for i in range(0, len(message), MAX_DATA_SIZE)]
+            # Calculate checksum for the entire message
+            checksum = generate_checksum(sequence_number, message)
 
-            for i, chunk in enumerate(message_chunks):
-                count = 0
-                while count < 3:  # Retry loop for retransmission
-                    # Create packet with sequence number, checksum, and data
-                    checksum = generate_checksum(sequence_number, chunk)
-                    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{chunk}{checksum}"
-                    server_socket.sendto(packet.encode(), peer_address)
-                    # print(f"Sent packet {sequence_number} to {peer_address}")
-                    # print("Packet sent", packet, "Checksum sent", checksum, "\n length of packet", len(packet))
-                    server_socket.settimeout(2)
-                    try:
-                        ack_packet, ack_peer_address = server_socket.recvfrom(MSS)
-                        ack_sequence_num = int(ack_packet.decode())
+            # Create packet with sequence number, checksum, and data
+            packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{message}{checksum}"
+            server_socket.sendto(packet.encode(), peer_address)
+            print(f"Sent packet {sequence_number} to {peer_address}")
 
-                        if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
-                            # print(f"ACK {sequence_number} received by {peer_address}")
-                            sequence_number += 1
-                            break  # Exit the retry loop for this chunk
+            server_socket.settimeout(2)
+            try:
+                ack_packet, ack_peer_address = server_socket.recvfrom(MSS)
+                ack_sequence_num = int(ack_packet.decode())
 
-                    except socket.timeout:
-                        count += 1
-                        print(f"Timeout occurred for chunk {i + 1}. Retransmitting... (Attempt {count})")
-                if count>3: 
-                    print("The message was not recieved please send again")
+                if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
+                    print(f"ACK {sequence_number} received from {peer_address}")
+                    sequence_number += 1
 
+            except socket.timeout:
+                print("Timeout occurred. Retransmitting...")
         except KeyboardInterrupt:
             print("Exiting...")
             break
