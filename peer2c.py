@@ -1,6 +1,7 @@
 import socket
 import threading
 import hashlib
+import random
 
 SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
@@ -18,12 +19,13 @@ def generate_checksum(sequence_num, data):
 
 def receive_messages(server_socket):
     received_chunks = {}  # Dictionary to store received chunks
-    next_sequence_number = 1  # Expected sequence number of the next chunk to process
+    # Expected sequence number of the next chunk to process
 
     while True:
         try:
             packet, peer_address = server_socket.recvfrom(65535)  # Receive entire packet
             sequence_num = int(packet[:SEQUENCE_NUM_SIZE])
+            next_sequence_number = sequence_num
             data = packet[HEADER_SIZE:-64]
             received_checksum = packet[-64:].decode()  # Extract checksum from the end
 
@@ -55,7 +57,7 @@ def receive_messages(server_socket):
             print("Receive timeout occurred.")
 
 def send_messages(server_socket, peer_address):
-    sequence_number = 1
+    sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
 
     while True:
         try:
