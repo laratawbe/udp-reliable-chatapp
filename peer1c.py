@@ -9,8 +9,8 @@ SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
 
 PEER_IP = '127.0.0.1'
-RECEIVE_PORT = 8080
-SEND_PORT = 8000
+RECEIVE_PORT = 8000
+SEND_PORT = 8080
 
 def generate_checksum(sequence_num, data):
     # Generate SHA-256 checksum for concatenated components
@@ -63,31 +63,59 @@ def receive_messages(server_socket, chat_frame):
         except socket.timeout:
             print("Receive timeout occurred.")
 
-def send_message(server_socket, peer_address, message_entry, chat_frame):
+
+def send_messages(server_socket, peer_address,message_entry, chat_frame):
     sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
+    last_message = ""
 
-    message = message_entry.get()
+    while True:
+        try:
+            message = message_entry.get()
 
-    if message == "HeymanStopman":
-        print("Exiting...")
-        return
+            if message == "HeymanStopman":
+                print("Exiting...")
+                return
 
-    checksum = generate_checksum(sequence_number, message)
+            last_message = message
 
-    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{message}{checksum}"
-    server_socket.sendto(packet.encode(), peer_address)
+            # Calculate checksum for the entire message
+            checksum = generate_checksum(sequence_number, message)
 
-    display_message(chat_frame, message, received=False)
+            # Create packet with sequence number, checksum, and data
+            packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{message}{checksum}"
+            server_socket.sendto(packet.encode(), peer_address)
+            print(f"Sent packet {sequence_number} to {peer_address}")
+            display_message(chat_frame, message, received=False)
 
-    message_entry.delete(0, tk.END)
+            server_socket.settimeout(2)
+            while True:
+                try:
+                    ack_packet, ack_peer_address = server_socket.recvfrom(65535)
+                    ack_sequence_num = int(ack_packet.decode())
+
+                    if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
+                        print(f"ACK {sequence_number} received from {peer_address}")
+                        break
+
+                except socket.timeout:
+                    print("Timeout occurred. Retransmitting...")
+                    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{last_message}{checksum}"
+                    server_socket.sendto(packet.encode(), peer_address)
+                    print(f"Retransmitted packet {sequence_number} to {peer_address}")
+
+            sequence_number += 1
+
+        except KeyboardInterrupt:
+            print("Exiting...")
+            break
 
 def display_message(chat_frame, message, received=False):
     time_stamp = datetime.now().strftime("%H:%M:%S")
 
     if received:
-        message_text = f"{time_stamp} - Peer: {message}"
+        message_text = f"{time_stamp} - Peer2: {message}"
     else:
-        message_text = f"{time_stamp} - You: {message}"
+        message_text = f"{time_stamp} - Peer1: {message}"
 
     message_label = tk.Label(chat_frame, text=message_text, wraplength=300, justify="left", bg="lightblue" if received else "lightgreen")
     message_label.pack(anchor="w", padx=10, pady=5)
@@ -102,7 +130,7 @@ def main():
     message_entry = tk.Entry(root, width=50)
     message_entry.pack(padx=10, pady=10, side=tk.LEFT, fill=tk.X, expand=True)
 
-    send_button = tk.Button(root, text="Send", command=lambda: send_message(send_socket, send_address, message_entry, chat_frame))
+    send_button = tk.Button(root, text="Send", command=lambda: send_messages(send_socket, send_address, message_entry, chat_frame))
     send_button.pack(padx=10, pady=10, side=tk.RIGHT)
 
     receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
