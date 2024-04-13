@@ -55,10 +55,9 @@ def receive_messages(server_socket):
 
         except socket.timeout:
             print("Receive timeout occurred.")
-
 def send_messages(server_socket, peer_address):
     sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
-    last_message = "" 
+    last_message = ""
 
     while True:
         try:
@@ -68,7 +67,7 @@ def send_messages(server_socket, peer_address):
                 print("Exiting...")
                 return
 
-            last_message = message  
+            last_message = message
 
             # Calculate checksum for the entire message
             checksum = generate_checksum(sequence_number, message)
@@ -79,22 +78,22 @@ def send_messages(server_socket, peer_address):
             print(f"Sent packet {sequence_number} to {peer_address}")
 
             server_socket.settimeout(2)
-            try:
-                while True:  
-                    ack_packet, ack_peer_address = server_socket.recvfrom(65535)  
+            while True:
+                try:
+                    ack_packet, ack_peer_address = server_socket.recvfrom(65535)
                     ack_sequence_num = int(ack_packet.decode())
 
                     if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
                         print(f"ACK {sequence_number} received from {peer_address}")
-                        break  
+                        break
 
-            except socket.timeout:
-                print("Timeout occurred. Retransmitting...")
-                packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{last_message}{checksum}"
-                server_socket.sendto(packet.encode(), peer_address)
-                print(f"Retransmitted packet {sequence_number} to {peer_address}")
+                except socket.timeout:
+                    print("Timeout occurred. Retransmitting...")
+                    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{last_message}{checksum}"
+                    server_socket.sendto(packet.encode(), peer_address)
+                    print(f"Retransmitted packet {sequence_number} to {peer_address}")
 
-            sequence_number += 1 
+            sequence_number += 1
 
         except KeyboardInterrupt:
             print("Exiting...")
