@@ -66,11 +66,11 @@ def receive_messages(server_socket, chat_frame):
 def send_messages(server_socket, peer_address,message_entry, chat_frame):
     sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
     last_message = ""
-
     while True:
         try:
             message = message_entry.get()
-
+            if message == "":
+                 break
             if message == "HeymanStopman":
                 print("Exiting...")
                 return
@@ -85,7 +85,8 @@ def send_messages(server_socket, peer_address,message_entry, chat_frame):
             server_socket.sendto(packet.encode(), peer_address)
             print(f"Sent packet {sequence_number} to {peer_address}")
             display_message(chat_frame, message, received=False)
-
+            message_entry.delete(0, tk.END)
+            
             server_socket.settimeout(2)
             while True:
                 try:
@@ -94,6 +95,7 @@ def send_messages(server_socket, peer_address,message_entry, chat_frame):
 
                     if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
                         print(f"ACK {sequence_number} received from {peer_address}")
+                        sequence_number += 1
                         break
 
                 except socket.timeout:
@@ -112,12 +114,22 @@ def display_message(chat_frame, message, received=False):
     time_stamp = datetime.now().strftime("%H:%M:%S")
 
     if received:
-        message_text = f"{time_stamp} - Peer2: {message}"
-    else:
         message_text = f"{time_stamp} - Peer1: {message}"
+        bg_color = "lightblue"
+        anchor = "w"
+    else:
+        message_text = f"{time_stamp} - Peer2: {message}"
+        bg_color = "lightgreen"
+        anchor = "e"
 
-    message_label = tk.Label(chat_frame, text=message_text, wraplength=300, justify="left", bg="lightblue" if received else "lightgreen")
-    message_label.pack(anchor="w", padx=10, pady=5)
+    bubble_frame = tk.Frame(chat_frame, bg=bg_color)
+    bubble_frame.pack(anchor=anchor, padx=10, pady=5, fill=tk.X)
+
+    message_label = tk.Label(bubble_frame, text=message_text, wraplength=300, justify="left", bg=bg_color)
+    message_label.pack(padx=(5, 10), pady=5, side=tk.LEFT if received else tk.RIGHT)
+
+    # Ensure the bubble frame expands to fill the width
+    bubble_frame.grid_columnconfigure(0, weight=1)
 
 def main():
     root = tk.Tk()
