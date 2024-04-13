@@ -1,7 +1,9 @@
+import tkinter as tk
 import socket
 import threading
 import hashlib
 import random
+from datetime import datetime
 
 SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
@@ -13,12 +15,10 @@ SEND_PORT = 8080
 def generate_checksum(sequence_num, data):
     # Generate SHA-256 checksum for concatenated components
     combined_data = f"{sequence_num}{data}"
-    print("COMBINED DATA" , combined_data)
     checksum = hashlib.sha256(combined_data.encode()).hexdigest()
     return checksum
 
-
-def receive_messages(server_socket):
+def receive_messages(server_socket, chat_frame):
     last_ack_sent = 0  
     received_chunks = {}  # Dictionary to store received chunks
 
@@ -40,17 +40,17 @@ def receive_messages(server_socket):
                     server_socket.sendto(ack_message.encode(), peer_address)
 
                     # Store the received chunk in the dictionary
-                    received_chunks[sequence_num] = data.decode()
+                    received_chunks[sequence_num] = (data.decode(), peer_address)
 
                     # Check if we can process any contiguous chunks
                     while next_sequence_number in received_chunks:
                         # Process and print the chunk
-                        print(f"Received from {peer_address}: {received_chunks[next_sequence_number]}")
+                        message, _ = received_chunks[next_sequence_number]
+                        display_message(chat_frame, message, received=True)
                         del received_chunks[next_sequence_number]  # Remove processed chunk
                         next_sequence_number += 1  # Move to the next expected sequence number
 
                     last_ack_sent = sequence_num
-                    print(f"ACK {sequence_num} sent to {peer_address}")
                 else:
                     print(f"Received a retransmitted packet {sequence_num}. Reacking and Ignoring.")
                     ack_message = f"{sequence_num}"
@@ -63,68 +63,58 @@ def receive_messages(server_socket):
         except socket.timeout:
             print("Receive timeout occurred.")
 
-def send_messages(server_socket, peer_address):
+def send_message(server_socket, peer_address, message_entry, chat_frame):
     sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
-    last_message = ""
 
-    while True:
-        try:
-            message = input("Enter message to send (type 'HeymanStopman' to exit): ")
+    message = message_entry.get()
 
-            if message == "HeymanStopman":
-                print("Exiting...")
-                return
+    if message == "HeymanStopman":
+        print("Exiting...")
+        return
 
-            last_message = message
+    checksum = generate_checksum(sequence_number, message)
 
-            # Calculate checksum for the entire message
-            checksum = generate_checksum(sequence_number, message)
+    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{message}{checksum}"
+    server_socket.sendto(packet.encode(), peer_address)
 
-            # Create packet with sequence number, checksum, and data
-            packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{message}{checksum}"
-            server_socket.sendto(packet.encode(), peer_address)
-            print(f"Sent packet {sequence_number} to {peer_address}")
+    display_message(chat_frame, message, received=False)
 
-            server_socket.settimeout(2)
-            while True:
-                try:
-                    ack_packet, ack_peer_address = server_socket.recvfrom(65535)
-                    ack_sequence_num = int(ack_packet.decode())
+    message_entry.delete(0, tk.END)
 
-                    if ack_sequence_num == sequence_number and ack_peer_address == peer_address:
-                        print(f"ACK {sequence_number} received from {peer_address}")
-                        break
+def display_message(chat_frame, message, received=False):
+    time_stamp = datetime.now().strftime("%H:%M:%S")
 
-                except socket.timeout:
-                    print("Timeout occurred. Retransmitting...")
-                    packet = f"{sequence_number:0{SEQUENCE_NUM_SIZE}d}{last_message}{checksum}"
-                    server_socket.sendto(packet.encode(), peer_address)
-                    print(f"Retransmitted packet {sequence_number} to {peer_address}")
+    if received:
+        message_text = f"{time_stamp} - Peer: {message}"
+    else:
+        message_text = f"{time_stamp} - You: {message}"
 
-            sequence_number += 1
-
-        except KeyboardInterrupt:
-            print("Exiting...")
-            break
+    message_label = tk.Label(chat_frame, text=message_text, wraplength=300, justify="left", bg="lightblue" if received else "lightgreen")
+    message_label.pack(anchor="w", padx=10, pady=5)
 
 def main():
+    root = tk.Tk()
+    root.title("Messaging App")
+
+    chat_frame = tk.Frame(root, bg="white", width=400, height=300)
+    chat_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+    message_entry = tk.Entry(root, width=50)
+    message_entry.pack(padx=10, pady=10, side=tk.LEFT, fill=tk.X, expand=True)
+
+    send_button = tk.Button(root, text="Send", command=lambda: send_message(send_socket, send_address, message_entry, chat_frame))
+    send_button.pack(padx=10, pady=10, side=tk.RIGHT)
+
     receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receive_socket.bind((PEER_IP, RECEIVE_PORT))
 
     send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     send_address = (PEER_IP, SEND_PORT)
 
-    receive_thread = threading.Thread(target=receive_messages, args=(receive_socket,))
+    receive_thread = threading.Thread(target=receive_messages, args=(receive_socket, chat_frame))
     receive_thread.start()
 
-    try:
-        send_messages(send_socket, send_address)
-    finally:
-        receive_socket.close()
-        send_socket.close()
-        receive_thread.join()
-
-    print("Program terminated.")
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
