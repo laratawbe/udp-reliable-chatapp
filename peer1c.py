@@ -7,8 +7,8 @@ SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
 
 PEER_IP = '127.0.0.1'
-RECEIVE_PORT = 8000
-SEND_PORT = 8080
+RECEIVE_PORT = 8080
+SEND_PORT = 8000
 
 def generate_checksum(sequence_num, data):
     # Generate SHA-256 checksum for concatenated components
@@ -17,9 +17,10 @@ def generate_checksum(sequence_num, data):
     checksum = hashlib.sha256(combined_data.encode()).hexdigest()
     return checksum
 
+
 def receive_messages(server_socket):
+    last_ack_sent = 0  
     received_chunks = {}  # Dictionary to store received chunks
-    # Expected sequence number of the next chunk to process
 
     while True:
         try:
@@ -31,30 +32,37 @@ def receive_messages(server_socket):
 
             # Calculate checksum of received data
             computed_checksum = generate_checksum(sequence_num, data.decode())
-            print(f"Computed Checksum: {computed_checksum}")
-            print(f"Received Checksum: {received_checksum}")
 
             if received_checksum == computed_checksum:
-                # Send ACK back to sender
-                ack_message = f"{sequence_num}"
-                server_socket.sendto(ack_message.encode(), peer_address)
+                if sequence_num > last_ack_sent:  
+                    # Send ACK back to sender
+                    ack_message = f"{sequence_num}"
+                    server_socket.sendto(ack_message.encode(), peer_address)
 
-                # Store the received chunk in the dictionary
-                received_chunks[sequence_num] = data.decode()
+                    # Store the received chunk in the dictionary
+                    received_chunks[sequence_num] = data.decode()
 
-                # Check if we can process any contiguous chunks
-                while next_sequence_number in received_chunks:
-                    # Process and print the chunk
-                    print(f"Received from {peer_address}: {received_chunks[next_sequence_number]}")
-                    del received_chunks[next_sequence_number]  # Remove processed chunk
-                    next_sequence_number += 1  # Move to the next expected sequence number
+                    # Check if we can process any contiguous chunks
+                    while next_sequence_number in received_chunks:
+                        # Process and print the chunk
+                        print(f"Received from {peer_address}: {received_chunks[next_sequence_number]}")
+                        del received_chunks[next_sequence_number]  # Remove processed chunk
+                        next_sequence_number += 1  # Move to the next expected sequence number
 
-                print(f"ACK {sequence_num} received by {peer_address}")
+                    last_ack_sent = sequence_num
+                    print(f"ACK {sequence_num} sent to {peer_address}")
+                else:
+                    print(f"Received a retransmitted packet {sequence_num}. Reacking and Ignoring.")
+                    ack_message = f"{sequence_num}"
+                    server_socket.sendto(ack_message.encode(), peer_address)
+                    last_ack_sent = sequence_num
+
             else:
                 print(f"Received packet {sequence_num} with incorrect checksum. Discarding.")
 
         except socket.timeout:
             print("Receive timeout occurred.")
+
 def send_messages(server_socket, peer_address):
     sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
     last_message = ""
