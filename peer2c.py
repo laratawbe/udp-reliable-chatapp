@@ -9,8 +9,8 @@ SEQUENCE_NUM_SIZE = 4
 HEADER_SIZE = SEQUENCE_NUM_SIZE
 
 PEER_IP = '127.0.0.1'
-RECEIVE_PORT = 8080
-SEND_PORT = 8000
+RECEIVE_PORT = 8000
+SEND_PORT = 8080
 initial_sequence_number = random.randint(1, 2**SEQUENCE_NUM_SIZE - 1)
 
 def generate_checksum(sequence_num, data):
@@ -105,11 +105,11 @@ def display_message(chat_frame, message, received=False):
     time_stamp = datetime.now().strftime("%H:%M:%S")
 
     if received:
-        message_text = f"{time_stamp} - Peer2: {message}"
+        message_text = f"{time_stamp} - user: {message}"
         bg_color = "lightblue"
         anchor = "w"
     else:
-        message_text = f"{time_stamp} - Peer1: {message}"
+        message_text = f"{time_stamp} - you: {message}"
         bg_color = "lightgreen"
         anchor = "e"
 
@@ -145,5 +145,5 @@ def main():
     receive_thread.start()
     root.mainloop()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
